@@ -3,8 +3,25 @@ feature_engineering.py
 src/
 
 Reusable functions for label encoding, train/test splitting, and TF-IDF
-vectorization. Called from 02_preprocessing.ipynb and any future notebooks
-that need to reload processed features.
+vectorization. Called from notebooks/02_feature_engineering.ipynb and any
+script that needs to reload processed features.
+
+Artifact layout:
+  data/processed/
+      medquad_model_ready.csv          cleaned + labelled dataset
+      splits/
+          X_train.npz                  TF-IDF sparse matrix, training split
+          X_test.npz                   TF-IDF sparse matrix, test split
+          y_qtype_train.npy            question-type labels, training split
+          y_qtype_test.npy             question-type labels, test split
+          y_dept_train.npy             department labels, training split
+          y_dept_test.npy              department labels, test split
+  models/
+      tfidf_vectorizer.pkl             fitted TfidfVectorizer
+      qtype_label_encoder.pkl          fitted LabelEncoder (question type)
+      dept_label_encoder.pkl           fitted LabelEncoder (department)
+      qtype_class_mapping.json         int -> class name (question type)
+      dept_class_mapping.json          int -> class name (department)
 """
 
 import json
@@ -18,9 +35,9 @@ from sklearn.model_selection import train_test_split
 from sklearn.feature_extraction.text import TfidfVectorizer
 
 
-# Paths relative to this file's location (src/)
 ROOT           = Path(__file__).resolve().parent.parent
 DATA_PROCESSED = ROOT / "data" / "processed"
+DATA_SPLITS    = ROOT / "data" / "processed" / "splits"
 MODELS_DIR     = ROOT / "models"
 
 
@@ -46,11 +63,7 @@ def load_clean_data():
 def encode_labels(df):
     """
     Fit LabelEncoder on qtype and department columns.
-    Saves qtype_mapping.json and dept_mapping.json to models/.
-
-    Parameters
-    ----------
-    df : DataFrame with qtype and department columns
+    Saves qtype_class_mapping.json and dept_class_mapping.json to models/.
 
     Returns
     -------
@@ -70,11 +83,14 @@ def encode_labels(df):
     qtype_map = {int(i): c for i, c in enumerate(qtype_enc.classes_)}
     dept_map  = {int(i): c for i, c in enumerate(dept_enc.classes_)}
 
-    with open(MODELS_DIR / "qtype_mapping.json", "w") as f:
+    with open(MODELS_DIR / "qtype_class_mapping.json", "w") as f:
         json.dump(qtype_map, f, indent=2)
 
-    with open(MODELS_DIR / "dept_mapping.json", "w") as f:
+    with open(MODELS_DIR / "dept_class_mapping.json", "w") as f:
         json.dump(dept_map, f, indent=2)
+
+    joblib.dump(qtype_enc, MODELS_DIR / "qtype_label_encoder.pkl")
+    joblib.dump(dept_enc,  MODELS_DIR / "dept_label_encoder.pkl")
 
     return df, qtype_enc, dept_enc
 
@@ -85,20 +101,8 @@ def encode_labels(df):
 
 def split_data(X, y_qtype, y_dept, test_size=0.2, random_state=42):
     """
-    Stratified 80/20 split. Stratifies on y_qtype because it has the most
-    class imbalance (definition ~4600 vs prevention ~186).
-
-    Parameters
-    ----------
-    X         : Series of question text
-    y_qtype   : Series of encoded qtype labels
-    y_dept    : Series of encoded department labels
-    test_size : float, default 0.2
-    random_state : int, default 42
-
-    Returns
-    -------
-    X_train, X_test, yq_train, yq_test, yd_train, yd_test
+    Stratified 80/20 split stratified on y_qtype (most imbalanced label).
+    definition class has ~4600 samples vs prevention ~186.
     """
     X_train, X_test, yq_train, yq_test, yd_train, yd_test = train_test_split(
         X, y_qtype, y_dept,
@@ -116,12 +120,7 @@ def split_data(X, y_qtype, y_dept, test_size=0.2, random_state=42):
 def build_tfidf(X_train, X_test):
     """
     Fit TF-IDF on X_train only, then transform both splits.
-    Never fits on X_test to prevent data leakage.
-
-    Parameters
-    ----------
-    X_train : Series or array of training question text
-    X_test  : Series or array of test question text
+    Fit on X_test is intentionally skipped to prevent data leakage.
 
     Returns
     -------
@@ -131,10 +130,10 @@ def build_tfidf(X_train, X_test):
     """
     tfidf = TfidfVectorizer(
         max_features=10000,
-        ngram_range=(1, 2),   # unigrams + bigrams: captures "what causes", "how is"
-        min_df=2,             # drop terms appearing in only 1 document
-        max_df=0.95,          # drop terms appearing in 95%+ of documents
-        sublinear_tf=True,    # log-scale TF, works better with Naive Bayes
+        ngram_range=(1, 2),
+        min_df=2,
+        max_df=0.95,
+        sublinear_tf=True,
         strip_accents="unicode",
         analyzer="word"
     )
@@ -154,45 +153,43 @@ def save_features(X_train_tfidf, X_test_tfidf,
                   yd_train, yd_test,
                   tfidf, qtype_enc, dept_enc):
     """
-    Save all processed features and model artifacts.
+    Persist all processed features and model artifacts to disk.
 
-    data/processed/  <- X/y splits (data artifacts)
-    models/          <- vectorizer and encoders (inference artifacts)
+    Sparse matrices + label arrays  ->  data/processed/splits/
+    Vectorizer + encoders           ->  models/
     """
-    DATA_PROCESSED.mkdir(parents=True, exist_ok=True)
+    DATA_SPLITS.mkdir(parents=True, exist_ok=True)
     MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Sparse feature matrices
-    sp.save_npz(str(DATA_PROCESSED / "X_train_tfidf.npz"), X_train_tfidf)
-    sp.save_npz(str(DATA_PROCESSED / "X_test_tfidf.npz"),  X_test_tfidf)
+    sp.save_npz(str(DATA_SPLITS / "X_train.npz"), X_train_tfidf)
+    sp.save_npz(str(DATA_SPLITS / "X_test.npz"),  X_test_tfidf)
 
-    # Labels as numpy arrays
-    np.save(str(DATA_PROCESSED / "yq_train.npy"), np.array(yq_train))
-    np.save(str(DATA_PROCESSED / "yq_test.npy"),  np.array(yq_test))
-    np.save(str(DATA_PROCESSED / "yd_train.npy"), np.array(yd_train))
-    np.save(str(DATA_PROCESSED / "yd_test.npy"),  np.array(yd_test))
+    np.save(str(DATA_SPLITS / "y_qtype_train.npy"), np.array(yq_train))
+    np.save(str(DATA_SPLITS / "y_qtype_test.npy"),  np.array(yq_test))
+    np.save(str(DATA_SPLITS / "y_dept_train.npy"),  np.array(yd_train))
+    np.save(str(DATA_SPLITS / "y_dept_test.npy"),   np.array(yd_test))
 
-    # Vectorizer and label encoders
     joblib.dump(tfidf,     MODELS_DIR / "tfidf_vectorizer.pkl")
-    joblib.dump(qtype_enc, MODELS_DIR / "qtype_encoder.pkl")
-    joblib.dump(dept_enc,  MODELS_DIR / "dept_encoder.pkl")
+    joblib.dump(qtype_enc, MODELS_DIR / "qtype_label_encoder.pkl")
+    joblib.dump(dept_enc,  MODELS_DIR / "dept_label_encoder.pkl")
 
-    print("Saved to data/processed/:")
-    print("  X_train_tfidf.npz, X_test_tfidf.npz")
-    print("  yq_train.npy, yq_test.npy, yd_train.npy, yd_test.npy")
+    print("Saved to data/processed/splits/:")
+    print("  X_train.npz, X_test.npz")
+    print("  y_qtype_train.npy, y_qtype_test.npy")
+    print("  y_dept_train.npy, y_dept_test.npy")
     print("Saved to models/:")
-    print("  tfidf_vectorizer.pkl, qtype_encoder.pkl, dept_encoder.pkl")
-    print("  qtype_mapping.json, dept_mapping.json")
+    print("  tfidf_vectorizer.pkl")
+    print("  qtype_label_encoder.pkl, dept_label_encoder.pkl")
+    print("  qtype_class_mapping.json, dept_class_mapping.json")
 
 
 # ---------------------------------------------------------------------------
-# 6. Load artifacts  (used in modeling/inference notebooks)
+# 6. Load artifacts
 # ---------------------------------------------------------------------------
 
 def load_features():
     """
     Load all saved features and artifacts from disk.
-    Call this from modeling notebooks instead of re-running the pipeline.
 
     Returns
     -------
@@ -204,20 +201,20 @@ def load_features():
         qtype_enc, dept_enc   : fitted LabelEncoders
     """
     return {
-        "X_train":   sp.load_npz(str(DATA_PROCESSED / "X_train_tfidf.npz")),
-        "X_test":    sp.load_npz(str(DATA_PROCESSED / "X_test_tfidf.npz")),
-        "yq_train":  np.load(str(DATA_PROCESSED / "yq_train.npy")),
-        "yq_test":   np.load(str(DATA_PROCESSED / "yq_test.npy")),
-        "yd_train":  np.load(str(DATA_PROCESSED / "yd_train.npy")),
-        "yd_test":   np.load(str(DATA_PROCESSED / "yd_test.npy")),
+        "X_train":   sp.load_npz(str(DATA_SPLITS / "X_train.npz")),
+        "X_test":    sp.load_npz(str(DATA_SPLITS / "X_test.npz")),
+        "yq_train":  np.load(str(DATA_SPLITS / "y_qtype_train.npy")),
+        "yq_test":   np.load(str(DATA_SPLITS / "y_qtype_test.npy")),
+        "yd_train":  np.load(str(DATA_SPLITS / "y_dept_train.npy")),
+        "yd_test":   np.load(str(DATA_SPLITS / "y_dept_test.npy")),
         "tfidf":     joblib.load(MODELS_DIR / "tfidf_vectorizer.pkl"),
-        "qtype_enc": joblib.load(MODELS_DIR / "qtype_encoder.pkl"),
-        "dept_enc":  joblib.load(MODELS_DIR / "dept_encoder.pkl"),
+        "qtype_enc": joblib.load(MODELS_DIR / "qtype_label_encoder.pkl"),
+        "dept_enc":  joblib.load(MODELS_DIR / "dept_label_encoder.pkl"),
     }
 
 
 # ---------------------------------------------------------------------------
-# 7. Full pipeline  (called from 02_preprocessing.ipynb)
+# 7. Full pipeline
 # ---------------------------------------------------------------------------
 
 def run_pipeline():
@@ -225,22 +222,21 @@ def run_pipeline():
     Runs the full feature engineering pipeline end to end.
     Saves all artifacts and returns a dict of processed data.
 
-    Usage in 02_preprocessing.ipynb:
-        import sys
-        sys.path.append("../src")
+    Usage in notebooks/02_feature_engineering.ipynb:
+        import sys; sys.path.insert(0, '../src')
         from feature_engineering import run_pipeline
         data = run_pipeline()
     """
     print("Loading data ...")
     df = load_clean_data()
-    print(f"  {df.shape[0]} rows loaded")
+    print(f"  {df.shape[0]:,} rows loaded")
 
     print("Encoding labels ...")
     df, qtype_enc, dept_enc = encode_labels(df)
     print(f"  qtype classes : {list(qtype_enc.classes_)}")
     print(f"  dept classes  : {df['department'].nunique()} departments")
 
-    print("Splitting data ...")
+    print("Splitting data (80/20 stratified on qtype) ...")
     X       = df["question_clean"]
     y_qtype = df["qtype_encoded"]
     y_dept  = df["dept_encoded"]
@@ -248,7 +244,7 @@ def run_pipeline():
     X_train, X_test, yq_train, yq_test, yd_train, yd_test = split_data(
         X, y_qtype, y_dept
     )
-    print(f"  Train: {len(X_train)}  |  Test: {len(X_test)}")
+    print(f"  Train: {len(X_train):,}  |  Test: {len(X_test):,}")
 
     print("Building TF-IDF features ...")
     X_train_tfidf, X_test_tfidf, tfidf = build_tfidf(X_train, X_test)
@@ -276,10 +272,6 @@ def run_pipeline():
         "dept_enc":  dept_enc,
     }
 
-
-# ---------------------------------------------------------------------------
-# Run as standalone script
-# ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
     run_pipeline()
