@@ -1,17 +1,20 @@
 """
-predict.py
-src/
-
+predict.py  —  src/
+============================================================
 Inference module for the trained MedQuAD classifiers.
 
 Loads the TF-IDF vectorizer, label encoders, and both trained Naive Bayes
 models from models/ and predicts the question type and medical department
 for any input text.  Models are lazy-loaded on first call and cached.
 
-Usage - command line:
+Encoder file name convention supported (both old and new):
+  - qtype_label_encoder.pkl   (new, from feature_engineering.py)
+  - qtype_encoder.pkl         (legacy, from older notebook runs)
+
+Usage — command line:
     python src/predict.py "What are the symptoms of diabetes?"
 
-Usage - Python import:
+Usage — Python import:
     from predict import predict, predict_batch
 
     result = predict("What causes high blood pressure?")
@@ -26,16 +29,43 @@ from pathlib import Path
 ROOT       = Path(__file__).resolve().parent.parent
 MODELS_DIR = ROOT / "models"
 
-_artifacts = None  # lazy-loaded on first call
+_artifacts = None   # lazy cache
+
+
+def _resolve(name_new: str, name_old: str) -> Path:
+    """Return the path to the first existing file (new name preferred)."""
+    p_new = MODELS_DIR / name_new
+    p_old = MODELS_DIR / name_old
+    if p_new.exists():
+        return p_new
+    if p_old.exists():
+        return p_old
+    raise FileNotFoundError(
+        f"Neither '{name_new}' nor '{name_old}' found in {MODELS_DIR}"
+    )
 
 
 def _load_artifacts() -> tuple:
-    tfidf       = joblib.load(MODELS_DIR / "tfidf_vectorizer.pkl")
-    qtype_enc   = joblib.load(MODELS_DIR / "qtype_label_encoder.pkl")
-    dept_enc    = joblib.load(MODELS_DIR / "dept_label_encoder.pkl")
-    qtype_model = joblib.load(MODELS_DIR / "qtype_model.pkl")
-    dept_model  = joblib.load(MODELS_DIR / "dept_model.pkl")
-    return tfidf, qtype_enc, dept_enc, qtype_model, dept_model
+    tfidf_path      = MODELS_DIR / "tfidf_vectorizer.pkl"
+    qtype_enc_path  = _resolve("qtype_label_encoder.pkl", "qtype_encoder.pkl")
+    dept_enc_path   = _resolve("dept_label_encoder.pkl",  "dept_encoder.pkl")
+    qtype_mdl_path  = MODELS_DIR / "qtype_model.pkl"
+    dept_mdl_path   = MODELS_DIR / "dept_model.pkl"
+
+    for p in [tfidf_path, qtype_enc_path, dept_enc_path, qtype_mdl_path, dept_mdl_path]:
+        if not p.exists():
+            raise FileNotFoundError(
+                f"Required model file missing: {p}\n"
+                "Run  python main.py --train  (or  python src/train.py)  first."
+            )
+
+    return (
+        joblib.load(tfidf_path),
+        joblib.load(qtype_enc_path),
+        joblib.load(dept_enc_path),
+        joblib.load(qtype_mdl_path),
+        joblib.load(dept_mdl_path),
+    )
 
 
 def predict(question: str) -> dict:
@@ -50,10 +80,10 @@ def predict(question: str) -> dict:
     Returns
     -------
     dict
-        qtype       : str   predicted question type  (e.g. 'symptoms')
-        department  : str   predicted department      (e.g. 'Cardiology')
-        qtype_proba : float calibrated confidence for qtype  (0-1)
-        dept_proba  : float calibrated confidence for dept   (0-1)
+        qtype       : str   predicted question type   (e.g. 'symptoms')
+        department  : str   predicted department       (e.g. 'Cardiology')
+        qtype_proba : float calibrated confidence (0–1)
+        dept_proba  : float calibrated confidence (0–1)
     """
     global _artifacts
     if _artifacts is None:
@@ -61,8 +91,7 @@ def predict(question: str) -> dict:
 
     tfidf, qtype_enc, dept_enc, qtype_model, dept_model = _artifacts
 
-    X = tfidf.transform([question])
-
+    X  = tfidf.transform([question])
     qi = qtype_model.predict(X)[0]
     di = dept_model.predict(X)[0]
 
@@ -92,11 +121,11 @@ def predict_batch(questions: list) -> list:
 
     tfidf, qtype_enc, dept_enc, qtype_model, dept_model = _artifacts
 
-    X            = tfidf.transform(questions)
-    qtype_idxs   = qtype_model.predict(X)
-    dept_idxs    = dept_model.predict(X)
-    qtype_probas = qtype_model.predict_proba(X)
-    dept_probas  = dept_model.predict_proba(X)
+    X             = tfidf.transform(questions)
+    qtype_idxs    = qtype_model.predict(X)
+    dept_idxs     = dept_model.predict(X)
+    qtype_probas  = qtype_model.predict_proba(X)
+    dept_probas   = dept_model.predict_proba(X)
 
     return [
         {
@@ -111,12 +140,12 @@ def predict_batch(questions: list) -> list:
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Usage: python src/predict.py \"Your medical question here\"")
+        print('Usage: python src/predict.py "Your medical question here"')
         sys.exit(1)
 
     question = " ".join(sys.argv[1:])
     result   = predict(question)
 
     print(f"\nQuestion   : {question}")
-    print(f"Type       : {result['qtype']:<15}  (confidence: {result['qtype_proba']:.1%})")
-    print(f"Department : {result['department']:<30}  (confidence: {result['dept_proba']:.1%})")
+    print(f"Type       : {result['qtype']:<18}  (confidence: {result['qtype_proba']:.1%})")
+    print(f"Department : {result['department']:<35}  (confidence: {result['dept_proba']:.1%})")

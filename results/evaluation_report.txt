@@ -1,19 +1,19 @@
 ============================================================
-MedQuAD Classifier - Evaluation Report
+MedQuAD Classifier — Evaluation Report
 ============================================================
-Generated : 2026-05-31 16:27:46
+Generated : 2026-05-31 18:39:54
 
 Dataset   : data/processed/medquad_model_ready.csv
 Train     : 11,971 samples
 Test      : 2,993 samples
 Features  : 8,607 TF-IDF features (unigrams + bigrams)
-Algorithm : ComplementNB  (Naive Bayes, handles class imbalance)
+Algorithm : CalibratedClassifierCV(ComplementNB)  — handles class imbalance
 Split     : 80 / 20  stratified on question type
 
 ============================================================
-TASK 1 - Question Type Classification (9 classes)
+TASK 1 — Question Type Classification (9 classes)
 ============================================================
-Model    : ComplementNB(alpha=0.3)
+Model    : CalibratedClassifierCV(ComplementNB(alpha=0.3), cv=5)
 Accuracy : 0.9749
 F1 Score : 0.9749  (weighted average)
 
@@ -36,9 +36,9 @@ weighted avg       0.98      0.97      0.97      2993
 
 
 ============================================================
-TASK 2 - Medical Department Classification (20 classes)
+TASK 2 — Medical Department Classification (20 classes)
 ============================================================
-Model    : ComplementNB(alpha=0.5)
+Model    : CalibratedClassifierCV(ComplementNB(alpha=0.5), cv=5)
 Accuracy : 0.9352
 F1 Score : 0.9339  (weighted average)
 
