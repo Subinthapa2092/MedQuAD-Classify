@@ -1,0 +1,71 @@
+============================================================
+MedQuAD Classifier - Evaluation Report
+============================================================
+Generated : 2026-05-31 16:27:46
+
+Dataset   : data/processed/medquad_model_ready.csv
+Train     : 11,971 samples
+Test      : 2,993 samples
+Features  : 8,607 TF-IDF features (unigrams + bigrams)
+Algorithm : ComplementNB  (Naive Bayes, handles class imbalance)
+Split     : 80 / 20  stratified on question type
+
+============================================================
+TASK 1 - Question Type Classification (9 classes)
+============================================================
+Model    : ComplementNB(alpha=0.3)
+Accuracy : 0.9749
+F1 Score : 0.9749  (weighted average)
+
+Per-class Classification Report:
+              precision    recall  f1-score   support
+
+      causes       0.99      0.97      0.98       132
+  definition       0.94      0.98      0.96       928
+   diagnosis       1.00      0.98      0.99       123
+epidemiology       1.00      1.00      1.00       223
+     genetic       0.96      0.92      0.94       497
+  prevention       1.00      0.92      0.96        37
+   prognosis       1.00      0.99      0.99        70
+    symptoms       1.00      1.00      1.00       537
+   treatment       1.00      0.99      1.00       446
+
+    accuracy                           0.97      2993
+   macro avg       0.99      0.97      0.98      2993
+weighted avg       0.98      0.97      0.97      2993
+
+
+============================================================
+TASK 2 - Medical Department Classification (20 classes)
+============================================================
+Model    : ComplementNB(alpha=0.5)
+Accuracy : 0.9352
+F1 Score : 0.9339  (weighted average)
+
+Per-class Classification Report:
+                                  precision    recall  f1-score   support
+
+                      Cardiology       0.98      0.96      0.97       134
+                     Dermatology       0.98      0.90      0.94        92
+                             ENT       0.95      0.76      0.84        49
+      Endocrinology & Metabolism       0.99      0.91      0.95       135
+   Gastroenterology & Hepatology       0.96      0.87      0.92        94
+General Medicine & Public Health       0.87      0.96      0.91       692
+        Genetics & Rare Diseases       0.93      0.98      0.96       614
+              Geriatrics & Aging       1.00      0.38      0.55         8
+         Gynecology & Obstetrics       0.91      0.43      0.59        23
+                      Hematology       0.98      0.91      0.94        89
+            Immunology & Allergy       1.00      1.00      1.00        22
+              Infectious Disease       0.97      0.88      0.92        41
+            Nephrology & Urology       0.96      0.94      0.95       114
+                       Neurology       0.97      0.97      0.97       339
+                        Oncology       0.96      0.95      0.95       219
+                   Ophthalmology       1.00      0.93      0.97        74
+      Orthopedics & Rheumatology       0.96      0.89      0.92       129
+                      Pediatrics       0.95      0.76      0.84        49
+      Psychiatry & Mental Health       0.72      0.62      0.67        21
+                     Pulmonology       0.98      0.91      0.94        55
+
+                        accuracy                           0.94      2993
+                       macro avg       0.95      0.85      0.88      2993
+                    weighted avg       0.94      0.94      0.93      2993
