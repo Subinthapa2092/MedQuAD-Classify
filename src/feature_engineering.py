@@ -1,6 +1,5 @@
 """
 feature_engineering.py  —  src/
-============================================================
 Label encoding, train/test splitting, TF-IDF vectorization.
 
 Called by:
@@ -31,7 +30,7 @@ DATA_SPLITS    = ROOT / "data" / "processed" / "splits"
 MODELS_DIR     = ROOT / "models"
 
 
-# ── helpers ───────────────────────────────────────────────────────────────────
+#  helpers 
 
 def _resolve_encoder(name_new: str, name_old: str) -> Path:
     """Return path to encoder file; prefers new name, falls back to old."""
@@ -46,7 +45,7 @@ def _resolve_encoder(name_new: str, name_old: str) -> Path:
     )
 
 
-# ── 1. Load data ──────────────────────────────────────────────────────────────
+#  1. Load data
 
 def load_clean_data() -> pd.DataFrame:
     """
@@ -65,8 +64,7 @@ def load_clean_data() -> pd.DataFrame:
     return df
 
 
-# ── 2. Encode labels ──────────────────────────────────────────────────────────
-
+#  2. Encode labels 
 def encode_labels(df: pd.DataFrame):
     """
     Fit LabelEncoder on qtype and department columns.
@@ -99,7 +97,7 @@ def encode_labels(df: pd.DataFrame):
     return df, qtype_enc, dept_enc
 
 
-# ── 3. Split ──────────────────────────────────────────────────────────────────
+#  3. Split ──────────────────────────────────────────────────────────────────
 
 def split_data(X, y_qtype, y_dept, test_size=0.2, random_state=42):
     """Stratified 80/20 split on qtype (most imbalanced label)."""
@@ -111,7 +109,7 @@ def split_data(X, y_qtype, y_dept, test_size=0.2, random_state=42):
     )
 
 
-# ── 4. TF-IDF ─────────────────────────────────────────────────────────────────
+#  4. TF-IDF ─────────────────────────────────────────────────────────────────
 
 def build_tfidf(X_train, X_test):
     """
@@ -132,7 +130,7 @@ def build_tfidf(X_train, X_test):
     return X_train_tfidf, X_test_tfidf, tfidf
 
 
-# ── 5. Save artifacts ─────────────────────────────────────────────────────────
+#  5. Save artifacts 
 
 def save_features(
     X_train_tfidf, X_test_tfidf,
@@ -159,7 +157,7 @@ def save_features(
     print("Saved → models/:  tfidf_vectorizer.pkl  qtype/dept_label_encoder.pkl")
 
 
-# ── 6. Load artifacts ─────────────────────────────────────────────────────────
+#  6. Load artifacts 
 
 def load_features() -> dict:
     """
@@ -199,7 +197,7 @@ def load_features() -> dict:
     }
 
 
-# ── 7. Full pipeline ──────────────────────────────────────────────────────────
+#  7. Full pipeline 
 
 def run_pipeline() -> dict:
     """
