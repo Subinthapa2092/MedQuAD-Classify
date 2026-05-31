@@ -1,168 +1,197 @@
 # MedQuAD-Classify
 
-Medical question classifier that predicts two labels simultaneously from raw text:
+A Naive Bayes text classifier that takes a raw medical question and predicts two labels at once.
 
-| Task | Classes | Test Accuracy |
-|---|---|---|
-| Question Type | 9 (symptoms, treatment, causes, ...) | **97.5 %** |
-| Medical Department | 20 (Cardiology, Neurology, ...) | **93.5 %** |
+| Task | Classes | Test Accuracy | Weighted F1 |
+|:---|:---:|:---:|:---:|
+| Question Type | 9 | **97.5%** | **97.5%** |
+| Medical Department | 20 | **93.5%** | **93.4%** |
 
-Algorithm: `CalibratedClassifierCV(ComplementNB)` + TF-IDF (10,000 features).
-Dataset: [MedQuAD](https://github.com/abachaa/MedQuAD) — 16,412 NIH medical Q&A pairs.
+**Algorithm:** `CalibratedClassifierCV(ComplementNB, cv=5)` + TF-IDF (10,000 features, unigrams + bigrams)
 
----
+**Dataset:** [MedQuAD on Kaggle](https://www.kaggle.com/datasets/jpmiller/layoutlm/data) — 16,412 medical Q&A pairs from the U.S. National Institutes of Health (NIH)
+
+## Quick Start
+
+```bash
+# Clone and set up
+git clone <repo-url>
+cd MedQuAD-Classify
+python -m venv venv
+venv\Scripts\activate          # Windows
+source venv/bin/activate       # macOS / Linux
+
+pip install -r requirements.txt
+
+# Train both models
+python main.py --train
+
+# Predict
+python main.py --predict "What are the symptoms of diabetes?"
+```
+
+## Entry Point
+
+All tasks are accessible through `main.py`:
+
+| Command | What it does |
+|:---|:---|
+| `python main.py` | Interactive menu |
+| `python main.py --train` | Train both classifiers |
+| `python main.py --predict "..."` | Predict for a single question |
+| `python main.py --batch questions.txt` | Predict for every line in a file |
+| `python main.py --evaluate` | Print the saved evaluation report |
+| `python main.py --pipeline` | Run full pipeline: clean → features → train |
 
 ## Project Structure
 
 ```
 MedQuAD-Classify/
-|-- data/
-|   |-- raw/
-|   |   +-- medquad.csv                  original dataset  (16,412 rows)
-|   +-- processed/
-|       |-- medquad_model_ready.csv      cleaned + labelled dataset (14,964 rows)
-|       +-- splits/                      train/test arrays
-|           |-- X_train.npz             TF-IDF matrix, training split
-|           |-- X_test.npz              TF-IDF matrix, test split
-|           |-- y_qtype_train.npy        question-type labels, train
-|           |-- y_qtype_test.npy         question-type labels, test
-|           |-- y_dept_train.npy         department labels, train
-|           +-- y_dept_test.npy          department labels, test
-|-- models/
-|   |-- tfidf_vectorizer.pkl             fitted TfidfVectorizer
-|   |-- qtype_label_encoder.pkl          fitted LabelEncoder (question type)
-|   |-- dept_label_encoder.pkl           fitted LabelEncoder (department)
-|   |-- qtype_class_mapping.json         int -> label name (question type)
-|   |-- dept_class_mapping.json          int -> label name (department)
-|   |-- qtype_model.pkl                  trained CalibratedComplementNB
-|   +-- dept_model.pkl                   trained CalibratedComplementNB
-|-- notebooks/
-|   |-- 01_eda_medicine.ipynb            EDA                      (person 1)
-|   |-- 02_preprocessing.ipynb          feature engineering      (person 2)
-|   +-- 03_modeling.ipynb               model training + eval    (person 3)
-|-- reports/
-|   +-- figures/
-|       |-- eda_plots.png
-|       |-- qtype_confusion_matrix.png
-|       |-- dept_confusion_matrix.png
-|       |-- qtype_f1_per_class.png
-|       |-- dept_f1_per_class.png
-|       |-- qtype_top_features.png
-|       +-- confidence_distribution.png
-|-- results/
-|   +-- evaluation_report.txt            full per-class classification reports
-|-- scripts/
-|   +-- generate_figures.py             regenerate all report figures
-|-- src/
-|   |-- __init__.py
-|   |-- cleaning_eda.py                  data cleaning + EDA        (person 1)
-|   |-- feature_engineering.py          TF-IDF pipeline            (person 2)
-|   |-- model.py                         model builders             (person 3)
-|   |-- train.py                         training entry-point       (person 3)
-|   +-- predict.py                       inference module           (person 3)
-|-- docs/
-|   +-- algorithm_documentation.md      algorithm choices + rationale
-|-- .gitignore
-|-- QUICKSTART.md
-|-- README.md
-+-- requirements.txt
+├── data/
+│   ├── raw/
+│   │   └── medquad.csv                   original dataset (16,412 rows)
+│   └── processed/
+│       ├── medquad_model_ready.csv        cleaned and labelled (14,964 rows)
+│       └── splits/
+│           ├── X_train.npz               TF-IDF matrix, training split
+│           ├── X_test.npz                TF-IDF matrix, test split
+│           ├── y_qtype_train.npy
+│           ├── y_qtype_test.npy
+│           ├── y_dept_train.npy
+│           └── y_dept_test.npy
+│
+├── models/
+│   ├── tfidf_vectorizer.pkl              fitted TfidfVectorizer
+│   ├── qtype_label_encoder.pkl           LabelEncoder — question type
+│   ├── dept_label_encoder.pkl            LabelEncoder — department
+│   ├── qtype_class_mapping.json          integer to class name (question type)
+│   ├── dept_class_mapping.json           integer to class name (department)
+│   ├── qtype_model.pkl                   trained CalibratedComplementNB
+│   └── dept_model.pkl                    trained CalibratedComplementNB
+│
+├── notebooks/
+│   ├── 01_eda.ipynb                      EDA                    (person 1)
+│   ├── 02_preprocessing.ipynb            feature engineering    (person 2)
+│   └── 03_modeling.ipynb                 model training + eval  (person 3)
+│
+├── reports/
+│   └── figures/
+│       ├── eda_plots.png
+│       ├── qtype_confusion_matrix.png
+│       ├── dept_confusion_matrix.png
+│       ├── qtype_f1_per_class.png
+│       ├── dept_f1_per_class.png
+│       ├── qtype_top_features.png
+│       └── confidence_distribution.png
+│
+├── results/
+│   └── evaluation_report.txt             full per-class classification reports
+│
+├── scripts/
+│   └── generate_figures.py              regenerate all evaluation figures
+│
+├── src/
+│   ├── __init__.py
+│   ├── cleaning_eda.py                   data cleaning and EDA       (person 1)
+│   ├── feature_engineering.py            TF-IDF pipeline             (person 2)
+│   ├── model.py                          ComplementNB model builders  (person 3)
+│   ├── train.py                          training script              (person 3)
+│   └── predict.py                        inference module             (person 3)
+│
+├── streamlit/
+│   └── app.py                            Streamlit UI (placeholder)
+│
+├── tests/
+│   └── test_predict.py                   unit and integration tests
+│
+├── conftest.py                           pytest configuration
+├── main.py                               unified CLI entry point
+├── setup.py                              package setup (pip install -e .)
+├── requirements.txt
+├── QUICKSTART.md
+└── .gitignore
 ```
-
----
-
-## Quick Start
-
-```bash
-# 1. Clone
-git clone <repo-url>
-cd MedQuAD-Classify
-
-# 2. Create and activate virtual environment
-python -m venv venv
-venv\Scripts\activate          # Windows
-# source venv/bin/activate     # macOS / Linux
-
-# 3. Install dependencies
-pip install -r requirements.txt
-
-# 4. Train both models
-python src/train.py
-
-# 5. Predict
-python src/predict.py "What are the symptoms of diabetes?"
-```
-
-See [QUICKSTART.md](QUICKSTART.md) for the full step-by-step guide.
-
----
 
 ## Data Pipeline
 
-```
-medquad.csv
-    |
-    v  src/cleaning_eda.py
-data/processed/medquad_model_ready.csv
-    |
-    v  src/feature_engineering.py
-data/processed/splits/   (X_train.npz, X_test.npz, y_*.npy)
-models/                  (tfidf_vectorizer.pkl, *_label_encoder.pkl)
-    |
-    v  src/train.py
-models/qtype_model.pkl  +  models/dept_model.pkl
-results/evaluation_report.txt
-    |
-    v  src/predict.py
-{"qtype": "symptoms", "department": "Endocrinology & Metabolism", ...}
-```
+| Step | Script | Input | Output |
+|:---:|:---|:---|:---|
+| 1 | `src/cleaning_eda.py` | `data/raw/medquad.csv` | `data/processed/medquad_model_ready.csv` |
+| 2 | `src/feature_engineering.py` | cleaned CSV | `data/processed/splits/*.npz / *.npy`, encoder PKLs |
+| 3 | `src/train.py` | splits + encoders | `models/qtype_model.pkl`, `models/dept_model.pkl`, evaluation report |
+| 4 | `src/predict.py` | trained models | `{"qtype": "...", "department": "...", "qtype_proba": ..., "dept_proba": ...}` |
 
----
+Run all four steps in one command:
+
+```bash
+python main.py --pipeline
+```
 
 ## Algorithm
 
-**ComplementNB** (Complement Naive Bayes) was chosen over MultinomialNB because
-the question-type label distribution is heavily skewed — `definition` has ~4,600
-samples while `prevention` has only ~186. ComplementNB computes class scores from
-the *complement distribution* (all other classes), reducing majority-class bias.
+**Why ComplementNB?**
 
-**CalibratedClassifierCV** wraps the base model with 5-fold cross-validation and
-Platt scaling. This serves two purposes:
-1. Calibrates output probabilities so confidence values are meaningful
-   (before: 21% for a correct dept prediction; after: 88%)
-2. Creates an ensemble of 5 models, boosting question-type accuracy from 92% to 97.5%
+The question-type label distribution is heavily skewed — `definition` has ~4,600 samples while `prevention` has only ~186 (a 25x ratio). ComplementNB addresses this by computing class scores from the complement distribution (all *other* classes), which reduces bias toward the majority class. It consistently outperforms MultinomialNB on imbalanced text classification tasks.
 
-Full rationale in [docs/algorithm_documentation.md](docs/algorithm_documentation.md).
+**Why CalibratedClassifierCV?**
 
----
+Wrapping ComplementNB in `CalibratedClassifierCV(cv=5, method="sigmoid")` provides two benefits:
+
+1. **Probability calibration** — Platt scaling maps raw log-scores to well-calibrated probabilities. A reported confidence of 88% means the model is correct approximately 88% of the time.
+2. **Ensemble effect** — `cv=5` trains five models on different data folds and averages their predictions, improving both accuracy and robustness.
+
+**TF-IDF configuration:**
+
+| Parameter | Value | Reason |
+|:---|:---:|:---|
+| `max_features` | 10,000 | Keeps vocabulary manageable |
+| `ngram_range` | (1, 2) | Captures intent phrases like "what causes", "how is" |
+| `min_df` | 2 | Removes terms appearing in only one document |
+| `max_df` | 0.95 | Removes near-universal terms |
+| `sublinear_tf` | True | Log-scales term frequency, standard for Naive Bayes |
 
 ## Results
 
-```
-Question Type (9 classes)             Medical Department (20 classes)
-------------------------------        --------------------------------
-Accuracy   :  97.49 %                 Accuracy   :  93.52 %
-Weighted F1:  97.49 %                 Weighted F1:  93.39 %
-```
+**Question Type — 9 classes**
 
-Detailed per-class breakdown: [results/evaluation_report.txt](results/evaluation_report.txt)
+| Class | Precision | Recall | F1 | Support |
+|:---|:---:|:---:|:---:|:---:|
+| causes | 0.99 | 0.97 | 0.98 | 132 |
+| definition | 0.94 | 0.98 | 0.96 | 928 |
+| diagnosis | 1.00 | 0.98 | 0.99 | 123 |
+| epidemiology | 1.00 | 1.00 | 1.00 | 223 |
+| genetic | 0.96 | 0.92 | 0.94 | 497 |
+| prevention | 1.00 | 0.92 | 0.96 | 37 |
+| prognosis | 1.00 | 0.99 | 0.99 | 70 |
+| symptoms | 1.00 | 1.00 | 1.00 | 537 |
+| treatment | 1.00 | 0.99 | 1.00 | 446 |
+| **weighted avg** | **0.98** | **0.97** | **0.97** | **2993** |
 
-Figures: [reports/figures/](reports/figures/)
+**Medical Department — 20 classes, weighted avg F1: 0.93**
 
----
+Low-support departments (Geriatrics n=8, Psychiatry n=21) show lower F1 due to limited test samples, not model failure.
 
 ## Python API
 
+Install as an editable package from the project root:
+
+```bash
+pip install -e .
+```
+
+Then import directly from anywhere:
+
 ```python
-import sys
-sys.path.insert(0, "src")
-from predict import predict, predict_batch
+from src.predict import predict, predict_batch
 
-# Single prediction
-print(predict("What are the symptoms of diabetes?"))
-# {'qtype': 'symptoms', 'department': 'Endocrinology & Metabolism',
-#  'qtype_proba': 0.967, 'dept_proba': 0.878}
+result = predict("What are the symptoms of diabetes?")
+# {
+#   "qtype":       "symptoms",
+#   "department":  "Endocrinology & Metabolism",
+#   "qtype_proba": 0.967,
+#   "dept_proba":  0.878
+# }
 
-# Batch
 questions = [
     "How is cancer treated?",
     "What causes kidney stones?",
@@ -172,12 +201,18 @@ for r in predict_batch(questions):
     print(r["qtype"], "|", r["department"])
 ```
 
----
+## Running Tests
+
+```bash
+pytest tests/ -v
+```
+
+Covers: output schema, confidence range, known-input regression, batch/single consistency, and artifact presence checks.
 
 ## Team
 
-| Person | Task |
-|---|---|
-| Person 1 | Data cleaning, EDA (`src/cleaning_eda.py`, `notebooks/01_eda_medicine.ipynb`) |
-| Person 2 | Feature engineering (`src/feature_engineering.py`, `notebooks/02_preprocessing.ipynb`) |
-| Person 3 | Model training, inference, project packaging (`src/model.py`, `src/train.py`, `src/predict.py`, `notebooks/03_modeling.ipynb`) |
+| Person | Responsibility | Key Files |
+|:---|:---|:---|
+| Person 1 | Data cleaning and EDA | `src/cleaning_eda.py`, `notebooks/01_eda.ipynb` |
+| Person 2 | Feature engineering | `src/feature_engineering.py`, `notebooks/02_preprocessing.ipynb` |
+| Person 3 | Model, inference, packaging | `src/model.py`, `src/train.py`, `src/predict.py`, `main.py`, `notebooks/03_modeling.ipynb` |
